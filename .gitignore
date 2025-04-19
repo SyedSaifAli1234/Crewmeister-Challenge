@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+logs/application.log.2025-04-20.0.gz
+logs/application.log.2025-04-19.1.gz
+logs/application.log.2025-04-19.0.gz
+logs/application.log.2025-04-18.0.gz
+logs/application.log.2025-04-17.0.gz
+logs/application.log
+exchange_rates.postman_collection.json

@@ -1,3 +1,45 @@
+## Security Considerations
+
+While this is a demo application, I wanted to highlight some important security aspects that I would implement in a production environment:
+
+### API Security
+- I would add proper authentication using OAuth2 or JWT tokens to secure the API endpoints
+- All API calls would be served over HTTPS to ensure data encryption in transit
+- I'd implement rate limiting to protect against potential abuse and DoS attacks
+- Input validation would be crucial to prevent injection attacks and ensure data integrity
+- Error handling would be carefully implemented to avoid exposing sensitive system information
+
+### Data Security
+- Sensitive data would be encrypted at rest using industry-standard encryption
+- I'd use parameterized queries exclusively to prevent SQL injection vulnerabilities
+- Comprehensive data validation would be implemented at all layers
+- Data retention policies would be established to comply with regulations and best practices
+
+### Infrastructure Security
+- I'd maintain a regular schedule for dependency updates to patch security vulnerabilities
+- Sensitive configuration would be managed through environment variables
+- Proper logging and monitoring would be set up for security event detection
+- If deployed in containers, I'd follow container security best practices
+
+### Best Practices
+- I'd implement the principle of least privilege throughout the application
+- CORS policies would be carefully configured to prevent unauthorized access
+- Regular security audits and penetration testing would be part of the development cycle
+- Session management would be implemented following security best practices
+
+Note: While these security measures aren't implemented in this demo (as they're beyond the current requirements), I believe they're essential for any production-grade application. I've included them here to demonstrate my understanding of security best practices in API development.
+
+
+
+
+
+
+
+
+
+
+
+
 # Crewmeister Test Assignment - Java Backend Developer
 
 ## Intro
