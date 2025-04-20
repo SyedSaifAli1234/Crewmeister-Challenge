@@ -10,6 +10,7 @@ import com.crewmeister.cmcodingchallenge.repository.ExchangeRateRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -55,59 +56,50 @@ public class ExchangeRateService {
 
     @Scheduled(cron = "0 0 16 * * MON-FRI")
     @Transactional
+    @CacheEvict(cacheNames = {"exchangeRates", "exchangeRate"}, allEntries = true)
     public void updateExchangeRates() {
         logger.info("Starting scheduled exchange rates update");
         updateExchangeRatesParallel();
     }
 
-    private void updateExchangeRatesParallel() {
+    public void updateExchangeRatesParallel() {
         logger.info("Starting parallel exchange rates update");
         long startTime = System.currentTimeMillis();
 
         List<String> currencies = currencyService.getAllCurrencies();
-        logger.debug("Found {} currencies to update", currencies.size());
+        logger.info("Processing {} currencies in parallel", currencies.size());
         
-        List<CompletableFuture<Void>> futures = currencies.stream()
-            .map(this::processCurrencyAsync)
-            .collect(Collectors.toList());
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        
-        long endTime = System.currentTimeMillis();
-        logger.info("Exchange rates update completed in {} seconds", (endTime - startTime) / 1000.0);
-    }
-
-    @Async("exchangeRateTaskExecutor")
-    @Transactional
-    public CompletableFuture<Void> processCurrencyAsync(String currency) {
-        try {
-            logger.debug("Processing currency: {}", currency);
-            List<ExchangeRateData> rates = bundesbankApiClient.fetchExchangeRates(currency);
-            Set<LocalDate> existingDates = repository.findByCurrency(currency).stream()
-                .map(ExchangeRate::getDate)
-                .collect(Collectors.toSet());
-
-            List<ExchangeRate> batchToSave = new ArrayList<>(BATCH_SIZE);
-            
-            for (ExchangeRateData rate : rates) {
-                if (!existingDates.contains(rate.getDate())) {
-                    batchToSave.add(new ExchangeRate(currency, rate.getDate(), rate.getRate()));
+        // Process currencies in parallel
+        currencies.parallelStream()
+            .forEach(currency -> {
+                try {
+                    logger.debug("Processing currency: {}", currency);
+                    List<ExchangeRateData> rates = bundesbankApiClient.fetchExchangeRates(currency);
+                    logger.debug("Fetched {} rates for currency: {}", rates.size(), currency);
                     
-                    if (batchToSave.size() >= BATCH_SIZE) {
-                        repository.saveAll(batchToSave);
-                        batchToSave.clear();
+                    Set<LocalDate> existingDates = repository.findByCurrency(currency).stream()
+                        .map(ExchangeRate::getDate)
+                        .collect(Collectors.toSet());
+
+                    // Process rates in parallel
+                    List<ExchangeRate> newRates = rates.parallelStream()
+                        .filter(rate -> !existingDates.contains(rate.getDate()))
+                        .map(rate -> new ExchangeRate(currency, rate.getDate(), rate.getRate()))
+                        .collect(Collectors.toList());
+
+                    if (!newRates.isEmpty()) {
+                        repository.saveAll(newRates);
+                        logger.info("Saved {} rates for currency {}", newRates.size(), currency);
+                    } else {
+                        logger.debug("No new rates for currency: {}", currency);
                     }
+                } catch (Exception e) {
+                    logger.error("Error processing rates for {}: {}", currency, e.getMessage(), e);
                 }
-            }
-            
-            if (!batchToSave.isEmpty()) {
-                logger.debug("Saving final batch of {} rates for currency {}", batchToSave.size(), currency);
-                repository.saveAll(batchToSave);
-            }
-        } catch (Exception e) {
-            logger.error("Error updating rates for {}: {}", currency, e.getMessage(), e);
-        }
-        return CompletableFuture.completedFuture(null);
+            });
+        
+        long duration = System.currentTimeMillis() - startTime;
+        logger.info("Exchange rates update completed in {} seconds", duration / 1000.0);
     }
 
     @Cacheable(value = "exchangeRates", key = "#currency")
@@ -128,16 +120,28 @@ public class ExchangeRateService {
                 .orElse(null);
     }
 
+    /**
+     * Converts an amount in a foreign currency to EUR using the exchange rate for the specified date.
+     * The exchange rate represents how many units of the foreign currency you get for 1 EUR.
+     * For example, if the rate is 1.1360 for USD, it means 1 EUR = 1.1360 USD.
+     *
+     * @param currency The source currency code (e.g., "USD")
+     * @param amount The amount to convert
+     * @param date The date for which to use the exchange rate
+     * @return ConversionResultDTO containing the conversion details
+     */
     public ConversionResultDTO convertCurrency(String currency, BigDecimal amount, LocalDate date) {
         logger.debug("Converting {} {} to EUR on date: {}", amount, currency, date);
+        validateDate(date);  // Check for future date first
         validateCurrency(currency);
         validateAmount(amount);
-        validateDate(date);
 
         ExchangeRate rate = getExchangeRateForDate(currency, date);
-        // Convert to EUR (divide by rate since all rates are against EUR) and round to 2 decimal places
+        logger.debug("Using exchange rate: 1 EUR = {} {}", rate.getRate(), currency);
+        
+        // Convert to EUR (divide by rate since rate represents foreign currency per EUR)
         BigDecimal result = amount.divide(rate.getRate(), 2, RoundingMode.HALF_UP);
-        logger.debug("Conversion result: {} {} = {} EUR", amount, currency, result);
+        logger.debug("Conversion result: {} {} = {} EUR (rate: {})", amount, currency, result, rate.getRate());
 
         return new ConversionResultDTO(
                 currency,
@@ -163,8 +167,8 @@ public class ExchangeRateService {
 
     public ExchangeRate getExchangeRateForDate(String currency, LocalDate date) {
         logger.debug("Fetching exchange rate for currency: {} on date: {}", currency, date);
+        validateDate(date);  // Check for future date first
         validateCurrency(currency);
-        validateDate(date);
         
         Optional<ExchangeRate> rate = repository.findByCurrencyAndDate(currency, date);
         if (rate.isEmpty()) {

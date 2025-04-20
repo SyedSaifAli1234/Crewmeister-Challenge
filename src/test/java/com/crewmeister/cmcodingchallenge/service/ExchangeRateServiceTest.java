@@ -173,33 +173,6 @@ class ExchangeRateServiceTest {
     }
 
     @Test
-    void processCurrencyAsync_shouldSaveNewRates() {
-        // Given
-        LocalDate date = LocalDate.now();
-        ExchangeRateData rateData = new ExchangeRateData(date, BigDecimal.valueOf(1.1));
-        when(bundesbankApiClient.fetchExchangeRates("USD")).thenReturn(Arrays.asList(rateData));
-        when(repository.findByCurrency("USD")).thenReturn(Collections.emptyList());
-        
-        // When
-        exchangeRateService.processCurrencyAsync("USD");
-        
-        // Then
-        verify(repository, times(1)).saveAll(any());
-    }
-
-    @Test
-    void processCurrencyAsync_shouldHandleApiErrorGracefully() {
-        // Given
-        when(bundesbankApiClient.fetchExchangeRates("USD")).thenThrow(new RuntimeException("API Error"));
-        
-        // When
-        exchangeRateService.processCurrencyAsync("USD");
-        
-        // Then
-        verify(repository, never()).saveAll(any());
-    }
-
-    @Test
     void getAllExchangeRates_shouldReturnEmptyListForNoRates() {
         // Given
         when(repository.findByCurrencyOrderByDateDesc("USD")).thenReturn(Collections.emptyList());

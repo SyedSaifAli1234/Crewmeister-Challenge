@@ -3,6 +3,7 @@ package com.crewmeister.cmcodingchallenge.controller;
 import com.crewmeister.cmcodingchallenge.domain.ExchangeRate;
 import com.crewmeister.cmcodingchallenge.dto.ConversionResultDTO;
 import com.crewmeister.cmcodingchallenge.facade.CurrencyFacade;
+import com.crewmeister.cmcodingchallenge.exception.ExchangeRateException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -112,7 +113,7 @@ class ExchangeRateControllerTest {
     void getExchangeRates_shouldHandleInvalidCurrency() {
         // Arrange
         when(currencyFacade.getExchangeRatesForCurrency("INVALID"))
-            .thenReturn(Collections.emptyList());
+            .thenThrow(new ExchangeRateException("INVALID_CURRENCY", "Invalid currency code: INVALID"));
 
         // Act & Assert
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
@@ -136,7 +137,7 @@ class ExchangeRateControllerTest {
     void getExchangeRateForDate_shouldHandleInvalidCurrency() {
         // Arrange
         when(currencyFacade.getExchangeRateForDate(eq("INVALID"), any(LocalDate.class)))
-            .thenReturn(null);
+            .thenThrow(new ExchangeRateException("INVALID_CURRENCY", "Invalid currency code: INVALID"));
 
         // Act & Assert
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
@@ -149,12 +150,12 @@ class ExchangeRateControllerTest {
         // Arrange
         LocalDate futureDate = LocalDate.now().plusYears(1);
         when(currencyFacade.getExchangeRateForDate(eq("USD"), eq(futureDate)))
-            .thenReturn(null);
+            .thenThrow(new ExchangeRateException("FUTURE_DATE", "Cannot fetch exchange rate for future date"));
 
         // Act & Assert
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
             () -> exchangeRateController.getExchangeRateForDate(futureDate, "USD"));
-        assertEquals(404, exception.getStatus().value());
+        assertEquals(400, exception.getStatus().value());
     }
 
     @Test

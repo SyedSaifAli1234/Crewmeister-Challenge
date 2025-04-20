@@ -14,9 +14,9 @@ public class AsyncConfig {
     @Bean(name = "exchangeRateTaskExecutor")
     public Executor exchangeRateTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(4); // Same as previous PARALLEL_THREADS
-        executor.setMaxPoolSize(8);  // Allow growth if needed
-        executor.setQueueCapacity(500);
+        executor.setCorePoolSize(10);  // Increased from default
+        executor.setMaxPoolSize(20);   // Increased from default
+        executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("ExchangeRate-");
         executor.initialize();
         return executor;

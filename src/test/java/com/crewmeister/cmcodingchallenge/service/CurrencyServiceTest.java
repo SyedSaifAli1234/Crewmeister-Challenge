@@ -1,6 +1,7 @@
 package com.crewmeister.cmcodingchallenge.service;
 
 import com.crewmeister.cmcodingchallenge.domain.Currency;
+import com.crewmeister.cmcodingchallenge.exception.ExchangeRateException;
 import com.crewmeister.cmcodingchallenge.repository.CurrencyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -98,6 +100,8 @@ class CurrencyServiceTest {
         when(currencyRepository.existsById("FOO")).thenReturn(false);
 
         assertThat(currencyService.isValidCurrency("EUR")).isTrue();
-        assertThat(currencyService.isValidCurrency("FOO")).isFalse();
+        assertThatThrownBy(() -> currencyService.isValidCurrency("FOO"))
+            .isInstanceOf(ExchangeRateException.class)
+            .hasMessageContaining("Currency code 'FOO' is not supported");
     }
 }

@@ -2,6 +2,7 @@ package com.crewmeister.cmcodingchallenge.controller;
 
 import com.crewmeister.cmcodingchallenge.domain.ExchangeRate;
 import com.crewmeister.cmcodingchallenge.dto.ConversionResultDTO;
+import com.crewmeister.cmcodingchallenge.exception.ExchangeRateException;
 import com.crewmeister.cmcodingchallenge.facade.CurrencyFacade;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -53,22 +54,24 @@ public class ExchangeRateController {
     @Operation(summary = "Get all exchange rates for a currency", description = "Returns a list of all available EUR exchange rates for a specific currency across all dates.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved exchange rates", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ExchangeRate.class))))
     @ApiResponse(responseCode = "400", description = "Invalid currency code supplied", content = @Content)
-    public ResponseEntity<List<ExchangeRate>> getExchangeRates(@Parameter(description = "3-letter ISO currency code", required = true, example = "USD") @RequestParam String currency) {
+    public ResponseEntity<List<ExchangeRate>> getExchangeRates(
+            @Parameter(description = "3-letter ISO currency code", required = true, example = "USD") 
+            @RequestParam String currency) {
         logger.debug("Received request to get exchange rates for currency: {}", currency);
         try {
             List<ExchangeRate> rates = currencyFacade.getExchangeRatesForCurrency(currency);
-            if (rates == null || rates.isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid currency code: " + currency);
-            }
             logger.debug("Returning {} exchange rates for currency: {}", rates.size(), currency);
             return ResponseEntity.ok(rates);
-        } catch (ResponseStatusException e) {
-            throw e;
-        } catch (Exception e) {
-            if (e instanceof IllegalArgumentException) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
-            }
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error retrieving exchange rates: " + e.getMessage());
+        } catch (ExchangeRateException ex) {
+            logger.error("Exchange rate error for currency {}: {}", currency, ex.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getErrorMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            logger.error("Invalid argument for currency {}: {}", currency, ex.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        } catch (Exception ex) {
+            logger.error("Unexpected error processing request for currency {}: {}", currency, ex.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, 
+                "An error occurred while retrieving exchange rates", ex);
         }
     }
 
@@ -84,19 +87,21 @@ public class ExchangeRateController {
         try {
             ExchangeRate rate = currencyFacade.getExchangeRateForDate(currency, date);
             if (rate == null) {
-                if (date.isAfter(LocalDate.now())) {
-                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No exchange rate available for future date: " + date);
-                }
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid currency code: " + currency);
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No exchange rate found for the given currency and date");
             }
             logger.debug("Returning exchange rate: {} for currency: {} on date: {}", rate.getRate(), currency, date);
             return ResponseEntity.ok(rate);
-        } catch (ResponseStatusException e) {
-            throw e;
-        } catch (Exception e) {
-            if (e instanceof IllegalArgumentException) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        } catch (ExchangeRateException e) {
+            if ("FUTURE_DATE".equals(e.getErrorCode()) || 
+                "INVALID_CURRENCY".equals(e.getErrorCode()) || 
+                "INVALID_CURRENCY_FORMAT".equals(e.getErrorCode()) ||
+                "INVALID_AMOUNT".equals(e.getErrorCode())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getErrorMessage());
             }
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error retrieving exchange rate: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error retrieving exchange rate: " + e.getMessage());
         }
     }
@@ -115,9 +120,20 @@ public class ExchangeRateController {
             ConversionResultDTO result = currencyFacade.convertToEur(currency, amount, date);
             logger.debug("Conversion result: {} {} = {} EUR", amount, currency, result.getConvertedAmount());
             return ResponseEntity.ok(result);
+        } catch (ExchangeRateException e) {
+            logger.error("Exchange rate error: {} (code: {})", e.getMessage(), e.getErrorCode());
+            if ("FUTURE_DATE".equals(e.getErrorCode()) || 
+                "INVALID_CURRENCY".equals(e.getErrorCode()) || 
+                "INVALID_CURRENCY_FORMAT".equals(e.getErrorCode()) ||
+                "INVALID_AMOUNT".equals(e.getErrorCode())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getErrorMessage());
+            }
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error converting currency: " + e.getMessage());
         } catch (IllegalArgumentException e) {
+            logger.error("Validation error: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
+            logger.error("Unexpected error: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error converting currency: " + e.getMessage());
         }
     }

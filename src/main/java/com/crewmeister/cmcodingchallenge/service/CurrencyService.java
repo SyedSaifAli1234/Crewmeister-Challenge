@@ -1,6 +1,7 @@
 package com.crewmeister.cmcodingchallenge.service;
 
 import com.crewmeister.cmcodingchallenge.domain.Currency;
+import com.crewmeister.cmcodingchallenge.exception.ExchangeRateException;
 import com.crewmeister.cmcodingchallenge.repository.CurrencyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
@@ -52,6 +54,7 @@ public class CurrencyService {
     @Scheduled(cron = "0 0 0 * * *") // Run at midnight every day
     @Transactional
     @Profile("!test") // This method will not run when the "test" profile is active
+    @CacheEvict(cacheNames = "currencies", allEntries = true)
     public void updateCurrencies() {
         try {
             String csvResponse = restTemplate.getForObject(BUNDESBANK_CURRENCY_URL, String.class);
@@ -108,8 +111,17 @@ public class CurrencyService {
     }
 
     public boolean isValidCurrency(String currencyCode) {
-        return currencyCode != null && 
-               isValidCurrencyFormat(currencyCode) && 
-               currencyRepository.existsById(currencyCode);
+        if (currencyCode == null) {
+            throw new IllegalArgumentException("Currency code cannot be null");
+        }
+        if (!isValidCurrencyFormat(currencyCode)) {
+            throw new ExchangeRateException("INVALID_CURRENCY_FORMAT", 
+                "Currency code must be exactly 3 uppercase letters");
+        }
+        if (!currencyRepository.existsById(currencyCode)) {
+            throw new ExchangeRateException("INVALID_CURRENCY",
+                String.format("Currency code '%s' is not supported", currencyCode));
+        }
+        return true;
     }
 } 
