@@ -38,7 +38,7 @@ import java.util.List;
  * Note: These security measures are not implemented in this demo as they're beyond the current requirements.
  */
 @RestController
-@RequestMapping("/api/exchange-rates")
+@RequestMapping("/api/v1/exchange-rates")
 @Tag(name = "Exchange Rates", description = "Operations related to EUR exchange rates")
 public class ExchangeRateController {
 
@@ -79,7 +79,7 @@ public class ExchangeRateController {
     @Operation(summary = "Get exchange rate for a specific date", description = "Returns the EUR exchange rate for a specific currency on a particular date.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved exchange rate",content = @Content(mediaType = "application/json", schema = @Schema(implementation = ExchangeRate.class)))
     @ApiResponse(responseCode = "400", description = "Invalid currency code or date format supplied", content = @Content)
-    @ApiResponse(responseCode = "404", description = "Exchange rate not found for the given currency and date", content = @Content)
+    @ApiResponse(responseCode = "500", description = "Exchange rate not found for the given currency and date", content = @Content)
     public ResponseEntity<ExchangeRate> getExchangeRateForDate(
             @Parameter(description = "Date in YYYY-MM-DD format", required = true, example = "2023-10-26") @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @Parameter(description = "3-letter ISO currency code", required = true, example = "USD") @RequestParam String currency) {
@@ -110,7 +110,7 @@ public class ExchangeRateController {
     @Operation(summary = "Convert an amount from a foreign currency to EUR", description = "Converts a given amount of a specified foreign currency into EUR based on the exchange rate of a particular date.")
     @ApiResponse(responseCode = "200", description = "Successfully converted currency",content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConversionResultDTO.class))) 
     @ApiResponse(responseCode = "400", description = "Invalid currency code, amount, or date format supplied", content = @Content)
-    @ApiResponse(responseCode = "404", description = "Exchange rate not found for the given currency and date", content = @Content)
+    @ApiResponse(responseCode = "500", description = "Exchange rate not found for the given currency and date", content = @Content)
     public ResponseEntity<ConversionResultDTO> convertCurrency(
             @Parameter(description = "3-letter ISO currency code of the source currency", required = true, example = "USD") @RequestParam String currency,
             @Parameter(description = "Amount of the source currency to convert", required = true, example = "100.50") @RequestParam BigDecimal amount,

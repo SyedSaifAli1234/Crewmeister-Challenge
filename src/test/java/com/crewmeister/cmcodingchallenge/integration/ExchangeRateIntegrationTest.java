@@ -50,7 +50,7 @@ class ExchangeRateIntegrationTest {
         exchangeRateRepository.saveAll(rates);
 
         // When: Making a request to get USD exchange rates
-        String url = "http://localhost:" + port + "/api/exchange-rates?currency=USD";
+        String url = "http://localhost:" + port + "/api/v1/exchange-rates?currency=USD";
         ResponseEntity<ExchangeRate[]> response = restTemplate.getForEntity(url, ExchangeRate[].class);
 
         // Then: Verify the response
@@ -69,7 +69,7 @@ class ExchangeRateIntegrationTest {
         exchangeRateRepository.save(rate);
 
         // When: Making a request to get the exchange rate for a specific date
-        String url = "http://localhost:" + port + "/api/exchange-rates/2023-01-01?currency=USD";
+        String url = "http://localhost:" + port + "/api/v1/exchange-rates/2023-01-01?currency=USD";
         ResponseEntity<ExchangeRate> response = restTemplate.getForEntity(url, ExchangeRate.class);
 
         // Then: Verify the response
@@ -87,7 +87,7 @@ class ExchangeRateIntegrationTest {
         exchangeRateRepository.save(rate);
 
         // When: Making a request to convert USD to EUR
-        String url = "http://localhost:" + port + "/api/exchange-rates/convert?currency=USD&amount=100.00&date=2023-01-01";
+        String url = "http://localhost:" + port + "/api/v1/exchange-rates/convert?currency=USD&amount=100.00&date=2023-01-01";
         ResponseEntity<ConversionResultDTO> response = restTemplate.getForEntity(url, ConversionResultDTO.class);
 
         // Then: Verify the response
@@ -98,5 +98,36 @@ class ExchangeRateIntegrationTest {
         assertThat(response.getBody().getConvertedAmount()).isEqualTo(new BigDecimal("81.00")); // 100 / 1.2345 ≈ 81.00
         assertThat(response.getBody().getRate()).isEqualTo(new BigDecimal("1.2345"));
         assertThat(response.getBody().getDate()).isEqualTo(LocalDate.of(2023, 1, 1));
+    }
+
+    @Test
+    void testInvalidCurrency() {
+        // When: Making a request with an invalid currency
+        String url = "http://localhost:" + port + "/api/v1/exchange-rates?currency=XYZ";
+        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+
+        // Then: Verify the response
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void testFutureDate() {
+        // When: Making a request with a future date
+        LocalDate futureDate = LocalDate.now().plusDays(1);
+        String url = "http://localhost:" + port + "/api/v1/exchange-rates/" + futureDate + "?currency=USD";
+        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+
+        // Then: Verify the response
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void testNegativeAmount() {
+        // When: Making a request with a negative amount
+        String url = "http://localhost:" + port + "/api/v1/exchange-rates/convert?currency=USD&amount=-100.00&date=2023-01-01";
+        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+
+        // Then: Verify the response
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }
